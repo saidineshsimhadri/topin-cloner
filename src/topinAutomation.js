@@ -413,6 +413,15 @@ function postJson(url, headers, payload) {
       });
       response.on('end', () => {
         try {
+          // Check if response is likely HTML (error page)
+          if (body.trim().startsWith('<!DOCTYPE') || body.trim().startsWith('<html')) {
+            resolve({
+              statusCode: response.statusCode || 0,
+              body: { error: `Received HTML response instead of JSON. Status: ${response.statusCode}` },
+            });
+            return;
+          }
+          
           // Check if response is likely JSON before parsing
           if (response.statusCode >= 400 || !body.trim().startsWith('{')) {
             resolve({
@@ -427,7 +436,11 @@ function postJson(url, headers, payload) {
             body: body ? JSON.parse(body) : {},
           });
         } catch (error) {
-          reject(new Error(`Unable to parse TinyURL response: ${body}`));
+          // If JSON parsing fails, return the raw body as error
+          resolve({
+            statusCode: response.statusCode || 0,
+            body: { error: `JSON parse error: ${error.message}. Raw response: ${body}` },
+          });
         }
       });
     });
@@ -442,8 +455,11 @@ async function createShortUrl(longUrl, alias) {
   if (!longUrl) {
     return '';
   }
+  
+  // Skip TinyURL creation if API token is missing or invalid
   if (!TINYURL_API_TOKEN) {
-    throw new Error('Missing TINYURL_API_TOKEN environment variable.');
+    console.log('TinyURL API token missing, using original URL');
+    return longUrl;
   }
 
   let resolvedAlias = slugify(alias);
@@ -474,7 +490,7 @@ async function createShortUrl(longUrl, alias) {
         return result.data.tiny_url;
       }
 
-      // Log the actual response for debugging
+      // If we get here, the API didn't return a short URL
       console.log(`TinyURL API response (${statusCode}):`, JSON.stringify(result, null, 2));
 
       const errors = Array.isArray(result?.errors) ? result.errors : [];
@@ -486,16 +502,20 @@ async function createShortUrl(longUrl, alias) {
         continue;
       }
 
-      throw new Error(`TinyURL API error (${statusCode}): ${JSON.stringify(result)}`);
+      // If it's not an alias issue, break and fall back to original URL
+      break;
     } catch (error) {
-      if (attempt === 2) { // Last attempt
-        throw error;
-      }
       console.log(`TinyURL attempt ${attempt + 1} failed:`, error.message);
+      if (attempt === 2) { // Last attempt, fall back to original URL
+        console.log('TinyURL API failed, using original URL as fallback');
+        return longUrl;
+      }
     }
   }
 
-  throw new Error(`TinyURL alias is not available after multiple attempts: "${alias}"`);
+  // Fallback to original URL if TinyURL creation fails
+  console.log('TinyURL creation failed, using original URL');
+  return longUrl;
 }
 
 function parseTopinDateTime(value) {
