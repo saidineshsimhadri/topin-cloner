@@ -5,3 +5,5 @@ uploads/*
 outputs/*
 !outputs/.gitkeep
 sessions/topin-auth.json
+.DS_Store
+**/.DS_Store
