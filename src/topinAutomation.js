@@ -413,6 +413,15 @@ function postJson(url, headers, payload) {
       });
       response.on('end', () => {
         try {
+          // Check if response is likely JSON before parsing
+          if (response.statusCode >= 400 || !body.trim().startsWith('{')) {
+            resolve({
+              statusCode: response.statusCode || 0,
+              body: { error: `HTTP ${response.statusCode}: ${body}` },
+            });
+            return;
+          }
+          
           resolve({
             statusCode: response.statusCode || 0,
             body: body ? JSON.parse(body) : {},
@@ -453,25 +462,37 @@ async function createShortUrl(longUrl, alias) {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(JSON.stringify(payload)),
     };
-    const { statusCode, body: result } = await postJson(
-      TINYURL_API_URL,
-      headers,
-      payload,
-    );
-    if (result?.data?.tiny_url) {
-      return result.data.tiny_url;
-    }
+    
+    try {
+      const { statusCode, body: result } = await postJson(
+        TINYURL_API_URL,
+        headers,
+        payload,
+      );
+      
+      if (result?.data?.tiny_url) {
+        return result.data.tiny_url;
+      }
 
-    const errors = Array.isArray(result?.errors) ? result.errors : [];
-    const aliasUnavailable = errors.some((error) => String(error).includes('Alias is not available'));
-    if (aliasUnavailable) {
-      const suffix = String(Math.floor(1000 + Math.random() * 9000));
-      const baseAlias = resolvedAlias.slice(0, MAX_TINYURL_ALIAS_LENGTH - suffix.length - 1);
-      resolvedAlias = `${baseAlias}-${suffix}`;
-      continue;
-    }
+      // Log the actual response for debugging
+      console.log(`TinyURL API response (${statusCode}):`, JSON.stringify(result, null, 2));
 
-    throw new Error(`TinyURL API error (${statusCode}): ${JSON.stringify(result)}`);
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      const aliasUnavailable = errors.some((error) => String(error).includes('Alias is not available'));
+      if (aliasUnavailable) {
+        const suffix = String(Math.floor(1000 + Math.random() * 9000));
+        const baseAlias = resolvedAlias.slice(0, MAX_TINYURL_ALIAS_LENGTH - suffix.length - 1);
+        resolvedAlias = `${baseAlias}-${suffix}`;
+        continue;
+      }
+
+      throw new Error(`TinyURL API error (${statusCode}): ${JSON.stringify(result)}`);
+    } catch (error) {
+      if (attempt === 2) { // Last attempt
+        throw error;
+      }
+      console.log(`TinyURL attempt ${attempt + 1} failed:`, error.message);
+    }
   }
 
   throw new Error(`TinyURL alias is not available after multiple attempts: "${alias}"`);
