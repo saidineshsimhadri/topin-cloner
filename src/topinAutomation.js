@@ -1094,65 +1094,45 @@ function publishAssessmentLocator(page) {
 async function launchBrowser({ headless, onLog }) {
   const isRender = process.env.RENDER === 'true';
   
+  // On Render, throw a more helpful error
+  if (isRender) {
+    throw new Error(
+      'Browser automation is not supported on Render free tier due to resource limitations. ' +
+      'Please run this application locally or upgrade to a paid Render plan with more resources. ' +
+      'Alternatively, consider deploying to Railway, Heroku, or a VPS with more memory and permissions.'
+    );
+  }
+  
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 75,
   };
 
-  // Add Render-specific browser arguments
-  if (isRender) {
-    launchOptions.args = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
-    ];
-  }
-
   try {
     return await chromium.launch(launchOptions);
   } catch (error) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
-    
-    // If on Render and browser is missing, try to install it
-    if (isRender && error.message.includes("Executable doesn't exist")) {
-      onLog('Attempting to install Chromium browser...');
-      try {
-        const { execSync } = require('child_process');
-        execSync('npx playwright install --with-deps chromium', { stdio: 'inherit' });
-        onLog('Chromium installation completed. Retrying browser launch...');
-        return await chromium.launch(launchOptions);
-      } catch (installError) {
-        onLog(`Browser installation failed: ${installError.message}`);
-      }
-    }
   }
 
-  // Only try Windows browsers if not on Render
-  if (!isRender) {
-    for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
-      if (!fs.existsSync(candidate.executablePath)) {
-        continue;
-      }
+  // Try Windows browsers if not on Render
+  for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
+    if (!fs.existsSync(candidate.executablePath)) {
+      continue;
+    }
 
-      try {
-        onLog(`Trying installed browser: ${candidate.name}.`);
-        return await chromium.launch({
-          ...launchOptions,
-          executablePath: candidate.executablePath,
-        });
-      } catch (error) {
-        onLog(`${candidate.name} launch failed: ${error.message}`);
-      }
+    try {
+      onLog(`Trying installed browser: ${candidate.name}.`);
+      return await chromium.launch({
+        ...launchOptions,
+        executablePath: candidate.executablePath,
+      });
+    } catch (error) {
+      onLog(`${candidate.name} launch failed: ${error.message}`);
     }
   }
 
   throw new Error(
-    'Unable to launch any Chromium-based browser. Windows likely blocked Playwright Chromium, and fallback browsers also failed.',
+    'Unable to launch any Chromium-based browser. Please ensure Chrome or Edge is installed, or run with --headless=false to see browser issues.',
   );
 }
 

@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "npx playwright install --with-deps chromium || echo 'Browser install failed, will try at runtime'"
   },
   "keywords": [],
   "author": "",
