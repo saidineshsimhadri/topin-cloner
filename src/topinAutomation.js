@@ -1076,6 +1076,19 @@ async function launchBrowser({ headless, onLog }) {
     return await chromium.launch(launchOptions);
   } catch (error) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
+    
+    // If on Render and browser is missing, try to install it
+    if (isRender && error.message.includes("Executable doesn't exist")) {
+      onLog('Attempting to install Chromium browser...');
+      try {
+        const { execSync } = require('child_process');
+        execSync('npx playwright install --with-deps chromium', { stdio: 'inherit' });
+        onLog('Chromium installation completed. Retrying browser launch...');
+        return await chromium.launch(launchOptions);
+      } catch (installError) {
+        onLog(`Browser installation failed: ${installError.message}`);
+      }
+    }
   }
 
   // Only try Windows browsers if not on Render
