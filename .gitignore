@@ -1,0 +1,7 @@
+node_modules/
+.sixth/
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
+sessions/topin-auth.json

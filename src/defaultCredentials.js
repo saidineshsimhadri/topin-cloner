@@ -1,0 +1,7 @@
+const DEFAULT_MOBILE_NUMBER = '8328122850';
+const DEFAULT_OTP = '573462';
+
+module.exports = {
+  DEFAULT_MOBILE_NUMBER,
+  DEFAULT_OTP,
+};
