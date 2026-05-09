@@ -1051,10 +1051,26 @@ function publishAssessmentLocator(page) {
 }
 
 async function launchBrowser({ headless, onLog }) {
+  const isRender = process.env.RENDER === 'true';
+  
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 75,
   };
+
+  // Add Render-specific browser arguments
+  if (isRender) {
+    launchOptions.args = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ];
+  }
 
   try {
     return await chromium.launch(launchOptions);
@@ -1062,19 +1078,22 @@ async function launchBrowser({ headless, onLog }) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
   }
 
-  for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
-    if (!fs.existsSync(candidate.executablePath)) {
-      continue;
-    }
+  // Only try Windows browsers if not on Render
+  if (!isRender) {
+    for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
+      if (!fs.existsSync(candidate.executablePath)) {
+        continue;
+      }
 
-    try {
-      onLog(`Trying installed browser: ${candidate.name}.`);
-      return await chromium.launch({
-        ...launchOptions,
-        executablePath: candidate.executablePath,
-      });
-    } catch (error) {
-      onLog(`${candidate.name} launch failed: ${error.message}`);
+      try {
+        onLog(`Trying installed browser: ${candidate.name}.`);
+        return await chromium.launch({
+          ...launchOptions,
+          executablePath: candidate.executablePath,
+        });
+      } catch (error) {
+        onLog(`${candidate.name} launch failed: ${error.message}`);
+      }
     }
   }
 
