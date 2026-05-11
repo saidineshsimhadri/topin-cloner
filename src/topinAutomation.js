@@ -827,8 +827,36 @@ async function waitForAuthenticatedTopinHome(page) {
     return false;
   }
 
-  await page.getByRole('button', { name: 'Home' }).waitFor({ timeout: 30000 });
-  return true;
+  try {
+    await page.getByRole('button', { name: 'Home' }).waitFor({ timeout: 30000 });
+    return true;
+  } catch (error) {
+    // Debug: Log what's actually on the page
+    console.log('Home button not found. Current URL:', page.url());
+    console.log('Page title:', await page.title().catch(() => 'Unable to get title'));
+    
+    // Try to find any buttons on the page for debugging
+    const buttons = await page.locator('button').allTextContents().catch(() => []);
+    console.log('Available buttons:', buttons);
+    
+    // Check if we're on the right domain
+    if (page.url().includes('config.topin.tech')) {
+      console.log('On correct domain, but Home button not found');
+      // Maybe the button text is different, let's try some alternatives
+      const alternatives = ['Dashboard', 'Home', 'Main', 'Overview'];
+      for (const alt of alternatives) {
+        try {
+          await page.getByRole('button', { name: alt }).waitFor({ timeout: 5000 });
+          console.log(`Found alternative button: ${alt}`);
+          return true;
+        } catch (e) {
+          // Continue to next alternative
+        }
+      }
+    }
+    
+    return false;
+  }
 }
 
 async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
