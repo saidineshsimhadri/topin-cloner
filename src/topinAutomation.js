@@ -947,6 +947,16 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
     try {
       await page.waitForURL(/config\.topin\.tech/, { timeout: 90000 });
       onLog('Successfully redirected to config.topin.tech');
+      
+      // Wait a bit more and check if we stay on the right domain
+      await page.waitForTimeout(2000);
+      const immediateUrl = page.url();
+      onLog(`Immediate URL after redirect: ${immediateUrl}`);
+      
+      if (immediateUrl.includes('accounts.ccbp.in/login')) {
+        onLog('Redirected back to login page - possible session issue');
+      }
+      
     } catch (error) {
       onLog(`Redirect timeout or failed. Current URL: ${page.url()}`);
       
@@ -969,23 +979,46 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
     }
     
     await waitForPageSettled(page);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000); // Longer wait to see if page stabilizes
 
     // Always use simplified validation - bypass the complex check entirely
-    onLog(`After login - Current URL: ${page.url()}`);
+    const finalUrl = page.url();
+    onLog(`Final URL after all waits: ${finalUrl}`);
     
-    if (page.url().includes('config.topin.tech') && !page.url().includes('accounts.ccbp.in/login')) {
-      onLog('Login successful - proceeding with automation');
+    // If we're on config.topin.tech (even briefly), or if we're not on login page, assume success
+    if (finalUrl.includes('config.topin.tech')) {
+      onLog('Login successful - on Topin domain');
+      onLog('Session validation bypassed for deployment compatibility');
+      return;
+    } else if (!finalUrl.includes('accounts.ccbp.in/login')) {
+      onLog('Not on login page - assuming login succeeded');
       onLog('Session validation bypassed for deployment compatibility');
       return;
     } else {
-      onLog(`Login may have failed - unexpected URL: ${page.url()}`);
-      // Even if URL check fails, let's try to continue - maybe the URL is different but login worked
-      if (!page.url().includes('accounts.ccbp.in/login')) {
-        onLog('Not on login page, assuming login succeeded despite URL check');
-        return;
+      onLog(`Login appears to have failed - still on login page: ${finalUrl}`);
+      
+      // Let's try to continue anyway - maybe the session is actually valid
+      onLog('Attempting to continue despite being on login page...');
+      
+      // Try going directly to config.topin.tech
+      try {
+        onLog('Trying direct navigation to config.topin.tech...');
+        await page.goto('https://config.topin.tech/', { waitUntil: 'domcontentloaded' });
+        await waitForPageSettled(page);
+        await page.waitForTimeout(3000);
+        
+        const directUrl = page.url();
+        onLog(`After direct navigation: ${directUrl}`);
+        
+        if (!directUrl.includes('accounts.ccbp.in/login')) {
+          onLog('Direct navigation successful - proceeding with automation');
+          return;
+        }
+      } catch (directError) {
+        onLog(`Direct navigation failed: ${directError.message}`);
       }
-      throw new Error(`Login failed - still on login page or unexpected redirect: ${page.url()}`);
+      
+      throw new Error(`Login failed - unable to access Topin dashboard: ${finalUrl}`);
     }
   }
 
