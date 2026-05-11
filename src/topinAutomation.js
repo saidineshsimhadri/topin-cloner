@@ -1120,12 +1120,33 @@ async function launchBrowser({ headless, onLog }) {
   } catch (error) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
     
-    // If on Railway and browser is missing dependencies, provide helpful error
-    if (isRailway && error.message.includes('libglib')) {
-      throw new Error(
-        'System dependencies missing. Railway needs to install Playwright with --with-deps flag. ' +
-        'Please check that the build script runs: npm run build'
-      );
+    // If on Railway and browser is missing dependencies, try to install at runtime
+    if (isRailway && (error.message.includes('libglib') || error.message.includes('Executable doesn\'t exist'))) {
+      onLog('Attempting to install Playwright browsers at runtime...');
+      try {
+        const { execSync } = require('child_process');
+        
+        // Try to install browsers and dependencies
+        execSync('npx playwright install chromium', { stdio: 'inherit' });
+        execSync('npx playwright install-deps chromium', { stdio: 'inherit' });
+        
+        onLog('Runtime installation completed. Retrying browser launch...');
+        return await chromium.launch(launchOptions);
+      } catch (installError) {
+        onLog(`Runtime installation failed: ${installError.message}`);
+        
+        // Final fallback - try without some problematic flags
+        try {
+          onLog('Trying simplified browser launch...');
+          const simpleLaunchOptions = {
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          };
+          return await chromium.launch(simpleLaunchOptions);
+        } catch (finalError) {
+          onLog(`Simplified launch also failed: ${finalError.message}`);
+        }
+      }
     }
   }
 

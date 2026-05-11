@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "npx playwright install chromium && npx playwright install-deps chromium || echo 'Playwright install failed, will try at runtime'"
   },
   "keywords": [],
   "author": "",
