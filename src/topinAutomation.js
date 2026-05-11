@@ -462,6 +462,8 @@ async function createShortUrl(longUrl, alias) {
     return longUrl;
   }
 
+  console.log(`TinyURL: Creating short URL for ${longUrl} with alias ${alias}`);
+
   let resolvedAlias = slugify(alias);
   while (resolvedAlias.length < 5) {
     resolvedAlias += Math.floor(Math.random() * 10);
@@ -480,34 +482,38 @@ async function createShortUrl(longUrl, alias) {
     };
     
     try {
+      console.log(`TinyURL attempt ${attempt + 1}: ${JSON.stringify(payload)}`);
       const { statusCode, body: result } = await postJson(
         TINYURL_API_URL,
         headers,
         payload,
       );
       
+      console.log(`TinyURL response (${statusCode}):`, JSON.stringify(result, null, 2));
+      
       if (result?.data?.tiny_url) {
+        console.log(`TinyURL success: ${result.data.tiny_url}`);
         return result.data.tiny_url;
       }
 
       // If we get here, the API didn't return a short URL
-      console.log(`TinyURL API response (${statusCode}):`, JSON.stringify(result, null, 2));
-
       const errors = Array.isArray(result?.errors) ? result.errors : [];
       const aliasUnavailable = errors.some((error) => String(error).includes('Alias is not available'));
       if (aliasUnavailable) {
         const suffix = String(Math.floor(1000 + Math.random() * 9000));
         const baseAlias = resolvedAlias.slice(0, MAX_TINYURL_ALIAS_LENGTH - suffix.length - 1);
         resolvedAlias = `${baseAlias}-${suffix}`;
+        console.log(`TinyURL alias unavailable, trying: ${resolvedAlias}`);
         continue;
       }
 
       // If it's not an alias issue, break and fall back to original URL
+      console.log(`TinyURL API error: ${JSON.stringify(result)}`);
       break;
     } catch (error) {
       console.log(`TinyURL attempt ${attempt + 1} failed:`, error.message);
       if (attempt === 2) { // Last attempt, fall back to original URL
-        console.log('TinyURL API failed, using original URL as fallback');
+        console.log('TinyURL API failed after all attempts, using original URL as fallback');
         return longUrl;
       }
     }
@@ -1146,14 +1152,22 @@ async function processRow(page, row, onLog) {
   let shortUrlError = '';
 
   try {
+    onLog(`Row ${row.rowNumber}: attempting to create TinyURL for: ${shortUrlSourceLink}`);
     shortUrl = await createShortUrl(
       shortUrlSourceLink,
       buildShortUrlAlias(row),
     );
-    onLog(`Row ${row.rowNumber}: generated short URL: ${shortUrl}`);
+    
+    if (shortUrl === shortUrlSourceLink) {
+      onLog(`Row ${row.rowNumber}: TinyURL creation failed - using original URL as fallback`);
+    } else {
+      onLog(`Row ${row.rowNumber}: generated short URL: ${shortUrl}`);
+    }
   } catch (error) {
     shortUrlError = `Short URL failed: ${error.message}`;
     onLog(`Row ${row.rowNumber}: ${shortUrlError}`);
+    onLog(`Row ${row.rowNumber}: using original URL as fallback`);
+    shortUrl = shortUrlSourceLink; // Explicit fallback
   }
 
   return {
