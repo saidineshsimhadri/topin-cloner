@@ -451,18 +451,18 @@ function postJson(url, headers, payload) {
   });
 }
 
-async function createShortUrl(longUrl, alias) {
+async function createShortUrl(longUrl, alias, onLog = console.log) {
   if (!longUrl) {
     return '';
   }
   
   // Skip TinyURL creation if API token is missing or invalid
   if (!TINYURL_API_TOKEN) {
-    console.log('TinyURL API token missing, using original URL');
+    onLog('TinyURL API token missing, using original URL');
     return longUrl;
   }
 
-  console.log(`TinyURL: Creating short URL for ${longUrl} with alias ${alias}`);
+  onLog(`TinyURL: Creating short URL for ${longUrl} with alias ${alias}`);
 
   let resolvedAlias = slugify(alias);
   while (resolvedAlias.length < 5) {
@@ -482,17 +482,17 @@ async function createShortUrl(longUrl, alias) {
     };
     
     try {
-      console.log(`TinyURL attempt ${attempt + 1}: ${JSON.stringify(payload)}`);
+      onLog(`TinyURL attempt ${attempt + 1}: ${JSON.stringify(payload)}`);
       const { statusCode, body: result } = await postJson(
         TINYURL_API_URL,
         headers,
         payload,
       );
       
-      console.log(`TinyURL response (${statusCode}):`, JSON.stringify(result, null, 2));
+      onLog(`TinyURL response (${statusCode}): ${JSON.stringify(result, null, 2)}`);
       
       if (result?.data?.tiny_url) {
-        console.log(`TinyURL success: ${result.data.tiny_url}`);
+        onLog(`TinyURL success: ${result.data.tiny_url}`);
         return result.data.tiny_url;
       }
 
@@ -503,24 +503,24 @@ async function createShortUrl(longUrl, alias) {
         const suffix = String(Math.floor(1000 + Math.random() * 9000));
         const baseAlias = resolvedAlias.slice(0, MAX_TINYURL_ALIAS_LENGTH - suffix.length - 1);
         resolvedAlias = `${baseAlias}-${suffix}`;
-        console.log(`TinyURL alias unavailable, trying: ${resolvedAlias}`);
+        onLog(`TinyURL alias unavailable, trying: ${resolvedAlias}`);
         continue;
       }
 
       // If it's not an alias issue, break and fall back to original URL
-      console.log(`TinyURL API error: ${JSON.stringify(result)}`);
+      onLog(`TinyURL API error: ${JSON.stringify(result)}`);
       break;
     } catch (error) {
-      console.log(`TinyURL attempt ${attempt + 1} failed:`, error.message);
+      onLog(`TinyURL attempt ${attempt + 1} failed: ${error.message}`);
       if (attempt === 2) { // Last attempt, fall back to original URL
-        console.log('TinyURL API failed after all attempts, using original URL as fallback');
+        onLog('TinyURL API failed after all attempts, using original URL as fallback');
         return longUrl;
       }
     }
   }
 
   // Fallback to original URL if TinyURL creation fails
-  console.log('TinyURL creation failed, using original URL');
+  onLog('TinyURL creation failed, using original URL');
   return longUrl;
 }
 
@@ -596,7 +596,16 @@ function normalizeAssessmentLinkForShortUrl(url) {
     return '';
   }
 
-  return trimmed.replace(/a_t=CLIENT/gi, '');
+  // Remove a_t=CLIENT parameter and clean up trailing &
+  let cleaned = trimmed.replace(/a_t=CLIENT/gi, '');
+  
+  // Remove trailing & or &amp; and clean up double &
+  cleaned = cleaned.replace(/&+$/, '').replace(/&+/g, '&');
+  
+  // If URL ends with ? or &, remove it
+  cleaned = cleaned.replace(/[?&]$/, '');
+  
+  return cleaned;
 }
 
 async function getLabeledValue(page, label) {
@@ -1156,6 +1165,7 @@ async function processRow(page, row, onLog) {
     shortUrl = await createShortUrl(
       shortUrlSourceLink,
       buildShortUrlAlias(row),
+      onLog
     );
     
     if (shortUrl === shortUrlSourceLink) {
