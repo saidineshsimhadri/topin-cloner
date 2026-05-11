@@ -7,3 +7,4 @@ outputs/*
 sessions/topin-auth.json
 .DS_Store
 **/.DS_Store
+.env
