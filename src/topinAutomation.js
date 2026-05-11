@@ -1092,42 +1092,59 @@ function publishAssessmentLocator(page) {
 }
 
 async function launchBrowser({ headless, onLog }) {
-  const isRender = process.env.RENDER === 'true';
-  
-  // On Render, throw a more helpful error
-  if (isRender) {
-    throw new Error(
-      'Browser automation is not supported on Render free tier due to resource limitations. ' +
-      'Please run this application locally or upgrade to a paid Render plan with more resources. ' +
-      'Alternatively, consider deploying to Railway, Heroku, or a VPS with more memory and permissions.'
-    );
-  }
+  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME;
   
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 75,
   };
 
+  // Add Railway/Linux-specific browser arguments
+  if (isRailway) {
+    launchOptions.args = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor'
+    ];
+  }
+
   try {
     return await chromium.launch(launchOptions);
   } catch (error) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
+    
+    // If on Railway and browser is missing dependencies, provide helpful error
+    if (isRailway && error.message.includes('libglib')) {
+      throw new Error(
+        'System dependencies missing. Railway needs to install Playwright with --with-deps flag. ' +
+        'Please check that the build script runs: npm run build'
+      );
+    }
   }
 
-  // Try Windows browsers if not on Render
-  for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
-    if (!fs.existsSync(candidate.executablePath)) {
-      continue;
-    }
+  // Try Windows browsers if not on Railway
+  if (!isRailway) {
+    for (const candidate of WINDOWS_BROWSER_CANDIDATES) {
+      if (!fs.existsSync(candidate.executablePath)) {
+        continue;
+      }
 
-    try {
-      onLog(`Trying installed browser: ${candidate.name}.`);
-      return await chromium.launch({
-        ...launchOptions,
-        executablePath: candidate.executablePath,
-      });
-    } catch (error) {
-      onLog(`${candidate.name} launch failed: ${error.message}`);
+      try {
+        onLog(`Trying installed browser: ${candidate.name}.`);
+        return await chromium.launch({
+          ...launchOptions,
+          executablePath: candidate.executablePath,
+        });
+      } catch (error) {
+        onLog(`${candidate.name} launch failed: ${error.message}`);
+      }
     }
   }
 

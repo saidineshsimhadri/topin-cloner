@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "npx playwright install --with-deps chromium || echo 'Browser install failed, will try at runtime'"
+    "build": "npx playwright install --with-deps chromium",
+    "railway-build": "npm run build"
   },
   "keywords": [],
   "author": "",
