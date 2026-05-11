@@ -916,19 +916,58 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
     onLog('Logging into Topin with the provided mobile number and OTP.');
     await page.locator('input[placeholder="Enter Number"]').fill(mobileNumber);
     await page.getByRole('button', { name: 'GET OTP' }).click();
+    
+    // Wait a bit for OTP request to process
+    await page.waitForTimeout(2000);
+    onLog('OTP request sent, waiting for input fields...');
 
     const digits = otp.replace(/\D/g, '');
     if (digits.length !== 6) {
       throw new Error('OTP must contain exactly 6 digits.');
     }
 
+    onLog(`Entering OTP: ${digits}`);
     const otpInputs = page.locator('input[aria-label*="Digit"], input[aria-label*="verification code"]');
+    
+    // Wait for OTP inputs to be available
+    await otpInputs.first().waitFor({ timeout: 10000 });
+    onLog('OTP input fields found, filling digits...');
+    
     for (let index = 0; index < 6; index += 1) {
       await otpInputs.nth(index).fill(digits[index]);
+      await page.waitForTimeout(100); // Small delay between digits
     }
-
+    
+    onLog('OTP digits entered, clicking verify button...');
     await page.getByRole('button', { name: /Verify & Login/i }).click();
-    await page.waitForURL(/config\.topin\.tech/, { timeout: 60000 });
+    
+    onLog('Verify button clicked, waiting for redirect...');
+    
+    // Wait longer for the redirect and be more flexible
+    try {
+      await page.waitForURL(/config\.topin\.tech/, { timeout: 90000 });
+      onLog('Successfully redirected to config.topin.tech');
+    } catch (error) {
+      onLog(`Redirect timeout or failed. Current URL: ${page.url()}`);
+      
+      // Check if we're still on login page after longer wait
+      await page.waitForTimeout(5000);
+      const currentUrl = page.url();
+      onLog(`After additional wait, current URL: ${currentUrl}`);
+      
+      if (currentUrl.includes('accounts.ccbp.in/login')) {
+        // Try clicking verify button again in case it didn't register
+        onLog('Still on login page, trying to click verify button again...');
+        try {
+          await page.getByRole('button', { name: /Verify & Login/i }).click();
+          await page.waitForTimeout(5000);
+          onLog(`After retry, current URL: ${page.url()}`);
+        } catch (retryError) {
+          onLog(`Retry failed: ${retryError.message}`);
+        }
+      }
+    }
+    
     await waitForPageSettled(page);
     await page.waitForTimeout(3000);
 
