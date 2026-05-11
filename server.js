@@ -69,11 +69,22 @@ app.post('/api/jobs', upload.single('csvFile'), async (req, res) => {
 
   jobs.set(jobId, job);
 
+  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production';
+  
+  console.log('Environment check:', {
+    RAILWAY_ENVIRONMENT_NAME: process.env.RAILWAY_ENVIRONMENT_NAME,
+    RAILWAY_PROJECT_NAME: process.env.RAILWAY_PROJECT_NAME,
+    NODE_ENV: process.env.NODE_ENV,
+    isRailway: isRailway,
+    originalHeadless: req.body.showBrowser !== 'true',
+    showBrowser: req.body.showBrowser
+  });
+
   const options = {
     csvPath: req.file.path,
     mobileNumber: (req.body.mobileNumber || '').trim(),
     otp: (req.body.otp || '').trim(),
-    headless: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME ? true : req.body.showBrowser !== 'true',
+    headless: isRailway ? true : req.body.showBrowser !== 'true',
     onLog: (message) => appendLog(job, message),
     onProgress: (progress) => {
       if (typeof progress.totalRows === 'number') job.totalRows = progress.totalRows;

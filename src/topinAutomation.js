@@ -1092,15 +1092,21 @@ function publishAssessmentLocator(page) {
 }
 
 async function launchBrowser({ headless, onLog }) {
-  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME;
+  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production';
+  
+  // Force headless on server environments
+  const forceHeadless = isRailway || !process.env.DISPLAY;
+  const actualHeadless = forceHeadless || headless;
+  
+  onLog(`Browser launch config: headless=${actualHeadless}, isRailway=${isRailway}, originalHeadless=${headless}`);
   
   const launchOptions = {
-    headless,
-    slowMo: headless ? 0 : 75,
+    headless: actualHeadless,
+    slowMo: actualHeadless ? 0 : 75,
   };
 
   // Add Railway/Linux-specific browser arguments
-  if (isRailway) {
+  if (isRailway || actualHeadless) {
     launchOptions.args = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -1116,6 +1122,7 @@ async function launchBrowser({ headless, onLog }) {
   }
 
   try {
+    onLog(`Launching browser with headless=${actualHeadless}`);
     return await chromium.launch(launchOptions);
   } catch (error) {
     onLog(`Bundled Playwright Chromium failed to launch: ${error.message}`);
@@ -1134,18 +1141,20 @@ async function launchBrowser({ headless, onLog }) {
         return await chromium.launch(launchOptions);
       } catch (installError) {
         onLog(`Runtime installation failed: ${installError.message}`);
-        
-        // Final fallback - try without some problematic flags
-        try {
-          onLog('Trying simplified browser launch...');
-          const simpleLaunchOptions = {
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-          };
-          return await chromium.launch(simpleLaunchOptions);
-        } catch (finalError) {
-          onLog(`Simplified launch also failed: ${finalError.message}`);
-        }
+      }
+    }
+    
+    // If X server error, force headless and retry
+    if (error.message.includes('Missing X server') || error.message.includes('DISPLAY')) {
+      onLog('X server error detected, forcing headless mode...');
+      const headlessOptions = {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      };
+      try {
+        return await chromium.launch(headlessOptions);
+      } catch (headlessError) {
+        onLog(`Headless launch also failed: ${headlessError.message}`);
       }
     }
   }
