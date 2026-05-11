@@ -69,7 +69,7 @@ app.post('/api/jobs', upload.single('csvFile'), async (req, res) => {
 
   jobs.set(jobId, job);
 
-  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production';
+  const isRailway = !!(process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production');
   
   console.log('Environment check:', {
     RAILWAY_ENVIRONMENT_NAME: process.env.RAILWAY_ENVIRONMENT_NAME,

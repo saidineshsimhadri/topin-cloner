@@ -1092,7 +1092,7 @@ function publishAssessmentLocator(page) {
 }
 
 async function launchBrowser({ headless, onLog }) {
-  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production';
+  const isRailway = !!(process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME || process.env.NODE_ENV === 'production');
   
   // Force headless on server environments
   const forceHeadless = isRailway || !process.env.DISPLAY;
@@ -1101,7 +1101,7 @@ async function launchBrowser({ headless, onLog }) {
   onLog(`Browser launch config: headless=${actualHeadless}, isRailway=${isRailway}, originalHeadless=${headless}`);
   
   const launchOptions = {
-    headless: actualHeadless,
+    headless: !!actualHeadless, // Ensure boolean
     slowMo: actualHeadless ? 0 : 75,
   };
 
