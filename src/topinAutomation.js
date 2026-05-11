@@ -819,7 +819,7 @@ async function setExamPinMode(page) {
   await ensureRadioOptionSelected(container, 'Common Start PIN');
 }
 
-async function waitForAuthenticatedTopinHome(page) {
+async function waitForAuthenticatedTopinHome(page, onLog = console.log) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await waitForPageSettled(page);
 
@@ -832,27 +832,52 @@ async function waitForAuthenticatedTopinHome(page) {
     return true;
   } catch (error) {
     // Debug: Log what's actually on the page
-    console.log('Home button not found. Current URL:', page.url());
-    console.log('Page title:', await page.title().catch(() => 'Unable to get title'));
+    onLog(`Home button not found. Current URL: ${page.url()}`);
+    
+    try {
+      const title = await page.title();
+      onLog(`Page title: ${title}`);
+    } catch (e) {
+      onLog('Unable to get page title');
+    }
     
     // Try to find any buttons on the page for debugging
-    const buttons = await page.locator('button').allTextContents().catch(() => []);
-    console.log('Available buttons:', buttons);
+    try {
+      const buttons = await page.locator('button').allTextContents();
+      onLog(`Available buttons: ${JSON.stringify(buttons)}`);
+    } catch (e) {
+      onLog('Unable to get button list');
+    }
     
     // Check if we're on the right domain
     if (page.url().includes('config.topin.tech')) {
-      console.log('On correct domain, but Home button not found');
+      onLog('On correct domain, but Home button not found');
       // Maybe the button text is different, let's try some alternatives
-      const alternatives = ['Dashboard', 'Home', 'Main', 'Overview'];
+      const alternatives = ['Dashboard', 'Home', 'Main', 'Overview', 'Menu'];
       for (const alt of alternatives) {
         try {
           await page.getByRole('button', { name: alt }).waitFor({ timeout: 5000 });
-          console.log(`Found alternative button: ${alt}`);
+          onLog(`Found alternative button: ${alt}`);
           return true;
         } catch (e) {
           // Continue to next alternative
         }
       }
+      
+      // Try looking for any navigation elements
+      try {
+        const navElements = await page.locator('nav, [role="navigation"]').count();
+        onLog(`Found ${navElements} navigation elements`);
+        
+        if (navElements > 0) {
+          onLog('Navigation found, assuming login successful');
+          return true;
+        }
+      } catch (e) {
+        onLog('Unable to check navigation elements');
+      }
+    } else {
+      onLog(`Not on expected domain. Current: ${page.url()}`);
     }
     
     return false;
@@ -898,7 +923,7 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
     await waitForPageSettled(page);
     await page.waitForTimeout(3000);
 
-    const authenticated = await waitForAuthenticatedTopinHome(page).catch(() => false);
+    const authenticated = await waitForAuthenticatedTopinHome(page, onLog).catch(() => false);
     if (!authenticated) {
       throw new Error('Login completed, but the Topin session was not established on config.topin.tech.');
     }
@@ -907,7 +932,7 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
     return;
   }
 
-  const alreadyAuthenticated = await waitForAuthenticatedTopinHome(page).catch(() => false);
+  const alreadyAuthenticated = await waitForAuthenticatedTopinHome(page, onLog).catch(() => false);
   if (alreadyAuthenticated) {
     onLog('Using saved Topin session.');
     return;
@@ -938,7 +963,7 @@ async function ensureLoggedIn(page, mobileNumber, otp, onLog) {
   await waitForPageSettled(page);
   await page.waitForTimeout(3000);
 
-  const authenticated = await waitForAuthenticatedTopinHome(page).catch(() => false);
+  const authenticated = await waitForAuthenticatedTopinHome(page, onLog).catch(() => false);
   if (!authenticated) {
     throw new Error('Login completed, but the Topin session was not established on config.topin.tech.');
   }
