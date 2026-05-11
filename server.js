@@ -73,7 +73,7 @@ app.post('/api/jobs', upload.single('csvFile'), async (req, res) => {
     csvPath: req.file.path,
     mobileNumber: (req.body.mobileNumber || '').trim(),
     otp: (req.body.otp || '').trim(),
-    headless: req.body.showBrowser !== 'true',
+    headless: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_NAME ? true : req.body.showBrowser !== 'true',
     onLog: (message) => appendLog(job, message),
     onProgress: (progress) => {
       if (typeof progress.totalRows === 'number') job.totalRows = progress.totalRows;
